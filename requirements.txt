@@ -1,7 +1,6 @@
-fastapi==0.115.0
-uvicorn==0.30.6
-pandas==2.2.2
-numpy==2.0.2
-joblib==1.4.2
-scikit-learn==1.5.1
-gdown==5.2.0
+fastapi
+uvicorn
+pandas
+numpy
+joblib
+scikit-learn
