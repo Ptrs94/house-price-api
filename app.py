@@ -5,14 +5,27 @@ Created on Sat Feb 21 23:41:23 2026
 @author: petro
 """
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+
+import os
+import joblib
+import gdown
 import pandas as pd
 import numpy as np
-import joblib
+from fastapi import FastAPI
+from pydantic import BaseModel
 
 app = FastAPI()
-pipe = joblib.load("rf_house_price_pipe.joblib")  # trained on log1p(Price)
+
+MODEL_FILE = "rf_house_price_pipe.joblib"
+FILE_ID = "19H8XmDUT8z5fwI7ZId-ts_1w8Xki_5_f"
+
+# Download model if missing
+if not os.path.exists(MODEL_FILE):
+    url = f"https://drive.google.com/uc?id={FILE_ID}"
+    gdown.download(url, MODEL_FILE, quiet=False)
+
+pipe = joblib.load(MODEL_FILE)  # trained on log1p(Price)
+
 
 class RowIn(BaseModel):
     PropertyType: str
