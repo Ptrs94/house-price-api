@@ -8,7 +8,6 @@ app = FastAPI()
 
 MODEL_FILE = "catboost_house_price.cbm"
 
-# Load CatBoost model (trained on log1p(Price))
 model = CatBoostRegressor()
 model.load_model(MODEL_FILE)
 print("✅ CatBoost model loaded:", MODEL_FILE)
@@ -27,27 +26,18 @@ class RowIn(BaseModel):
     lsoa21cd: str
     msoa21cd: str
     oa21cd: str
-    Index_of_Multiple_Deprivation_IMD_Decile: float = Field(
-        ...,
-        alias="Index of Multiple Deprivation (IMD) Decile (where 1 is most deprived 10% of LSOAs)"
-    )
-
-    class Config:
-        populate_by_name = True  # allow alias field name in input JSON
 
 
 @app.get("/")
 def home():
-    return {"message": "House Price API is running (CatBoost)"}
+    return {"message": "House Price API is running (CatBoost, no IMD)"}
 
 
 @app.post("/predict")
 def predict(row: RowIn):
-    # Convert to DataFrame with the ORIGINAL training column names
-    data = row.model_dump(by_alias=True)
-    X = pd.DataFrame([data])
+    X = pd.DataFrame([row.model_dump()])
 
-    # Ensure categorical fields are strings (CatBoost expects this)
+    # ensure categorical columns are strings
     cat_cols = [
         "PropertyType",
         "NewBuild",
@@ -60,8 +50,6 @@ def predict(row: RowIn):
     for c in cat_cols:
         X[c] = X[c].astype(str)
 
-    # Predict log-price then convert back
     pred_log = float(model.predict(X)[0])
     pred_price = float(np.expm1(pred_log))
-
     return {"predicted_price": pred_price}
