@@ -5,7 +5,6 @@ Created on Sat Feb 21 23:41:23 2026
 @author: petro
 """
 
-
 import os
 import joblib
 import gdown
@@ -17,7 +16,7 @@ from pydantic import BaseModel
 app = FastAPI()
 
 MODEL_FILE = "rf_house_price_pipe.joblib"
-FILE_ID = "19H8XmDUT8z5fwI7ZId-ts_1w8Xki_5_f"
+FILE_ID = "1b7TNc9xyqUaFFh67pWA__68UxS2oZHbg"
 
 # Download model if missing
 if not os.path.exists(MODEL_FILE):
