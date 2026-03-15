@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from catboost import CatBoostRegressor
 import os
 
-app = FastAPI(title="House Price API with Bias Correction")
+app = FastAPI(title="House Price API with Bias Correction (Sheet-Friendly)")
 
 # ----------------------------
 # Load models from current folder
@@ -14,12 +14,12 @@ models = {}
 bias_bins = {}
 bias_factors = {}
 
-# Quartile bins and bias factors from training
+# Quartile bins and bias factors from training (adjust if you have real values)
 quartile_bins = [200000, 275000, 350000, 425000, 500000]
 quartile_factors = [1.05, 1.02, 0.98, 0.95]
 
 for house_type in ["D", "S", "T"]:
-    model_file = f"catboost_{house_type}.cbm"  # current folder
+    model_file = f"catboost_{house_type}.cbm"
     if os.path.exists(model_file):
         model = CatBoostRegressor()
         model.load_model(model_file)
@@ -31,25 +31,47 @@ for house_type in ["D", "S", "T"]:
         print(f"⚠️ Model file for {house_type} not found. Skipping.")
 
 # ----------------------------
+# Expected column order from sheet
+# ----------------------------
+SHEET_COLUMNS = [
+    "PropertyType",
+    "NewBuild",
+    "Postcode_area",
+    "CURRENT_ENERGY_RATING",
+    "TOTAL_FLOOR_AREA",
+    "NUMBER_HABITABLE_ROOMS",
+    "year",
+    "quarter",
+    "Age",
+    "lsoa21cd",
+    "msoa21cd",
+    "oa21cd"
+]
+
+# ----------------------------
 # Input schema
 # ----------------------------
 class RowIn(BaseModel):
-    PropertyType: str = Field(..., description="D/S/T etc")
-    NewBuild: str = Field(..., description="Y/N")
-    Postcode_area: str
-    CURRENT_ENERGY_RATING: str
-    TOTAL_FLOOR_AREA: float
-    NUMBER_HABITABLE_ROOMS: float
-    year: int
-    quarter: int
-    Age: float
-    lsoa21cd: str
-    msoa21cd: str
-    oa21cd: str
+    row: str = Field(..., description="Space-separated row from the sheet, 12 columns")
 
 # ----------------------------
 # Helper functions
 # ----------------------------
+def parse_sheet_row(row_str: str) -> pd.DataFrame:
+    parts = row_str.strip().split()
+    if len(parts) != len(SHEET_COLUMNS):
+        raise ValueError(f"Expected {len(SHEET_COLUMNS)} columns, got {len(parts)}")
+    # Convert numeric columns
+    data = {}
+    for i, col in enumerate(SHEET_COLUMNS):
+        if col in ["TOTAL_FLOOR_AREA", "NUMBER_HABITABLE_ROOMS"]:
+            data[col] = float(parts[i])
+        elif col in ["year", "quarter", "Age"]:
+            data[col] = int(parts[i])
+        else:
+            data[col] = parts[i]
+    return pd.DataFrame([data])
+
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["rooms_per_m2"] = df["NUMBER_HABITABLE_ROOMS"] / df["TOTAL_FLOOR_AREA"]
@@ -69,11 +91,15 @@ def apply_bias_correction(price: float, house_type: str) -> float:
 # ----------------------------
 @app.get("/")
 def home():
-    return {"message": "House Price API running with bias correction"}
+    return {"message": "House Price API (Sheet-friendly) running with bias correction"}
 
 @app.post("/predict")
-def predict(row: RowIn):
-    X = pd.DataFrame([row.model_dump()])
+def predict(input_row: RowIn):
+    try:
+        X = parse_sheet_row(input_row.row)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     X = compute_features(X)
 
     cat_cols = [
@@ -85,7 +111,7 @@ def predict(row: RowIn):
 
     house_type = X.at[0, "PropertyType"]
     if house_type not in models:
-        return {"error": f"No model available for PropertyType '{house_type}'"}
+        raise HTTPException(status_code=400, detail=f"No model available for PropertyType '{house_type}'")
 
     model = models[house_type]
 
